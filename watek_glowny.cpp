@@ -18,7 +18,7 @@ void mainLoop()
             // wanted = rand() % (C / 2) + 1;
             wanted = 8;
             // wysyłanie wszystkim ile chcę części
-            debug("[REST_PROJECT] Chcę %d części -> [WAIT_TAKE]", wanted);
+            debug("[REST_PROJECT] Chcę %d części -> [WAIT_TAKE], AckCounterTake: %d", wanted, AckCounterTake);
             // ustawiamy wektor z informacjami od jakiego procesu dostaliśmy ACK_TAKE
             // aby poprawnie przyjmować od nich REQ_RETURN
             for (long unsigned int i = 0; i < ReceivedAckTake.size(); i++)

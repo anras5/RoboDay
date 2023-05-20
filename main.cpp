@@ -123,7 +123,7 @@ void inicjuj(int *argc, char ***argv)
 
     int provided;
     MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
-    check_thread_support(provided);
+    // check_thread_support(provided);
 
     // wczytujemy rank i size
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
