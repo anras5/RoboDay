@@ -20,35 +20,20 @@ void *startWatekKom(void *ptr)
             {
                 pthread_mutex_lock(&mutexLamportyWyslania);
                 pthread_mutex_lock(&mutexAckCounterTake);
-                // AckCounterTake++;
                 debug("Otrzymałem REQ_TAKE od %d z %d częściami", p.nadawca, p.liczbaCzesci);
-                // jeśli odebrany od j REQ_TAKE ma priorytet wyższy niż wysłany REQ_TAKE
-                // to liczba części o które ubiega się j jest dodawana do zmiennej taken
                 debug("p.lamport: %d, mój wysłany %d", p.lamport, lamportyWyslania.at(p.nadawca));
-                if (p.lamport < lamportyWyslania.at(p.nadawca) || (p.lamport == lamport && p.nadawca < rank))
-                {
-                    pthread_mutex_lock(&mutexTaken);
-                    taken = taken + p.liczbaCzesci;
-                    pthread_mutex_unlock(&mutexTaken);
-                    // wysyłamy posiadane części czyli 0 bo jesteśmy gorsi od pytającego
-                    wyslijPakiet(p.nadawca, ACK_TAKE, 0, -1);
-                }
-                // przypadek kiedy czekamy jedynie na zwolnienie zasobów i nie pojawi się nikt przed nami
-                // (oprócz czekających przed nami o których już wiemy)
-                else if (AckCounterTake == size - 1)
-                {
+                if (p.lamport > lamportyWyslania.at(p.nadawca) || (p.lamport == lamport && p.nadawca > rank)) {
+                    // wysyłamy w ACK_TAKE naszą wartość wanted, ponieważ
+                    // j jest za nami w kolejce i musi nas wziąc pod uwagę
                     pthread_mutex_lock(&mutexWanted);
                     wyslijPakiet(p.nadawca, ACK_TAKE, wanted, -1);
                     debug("Wysłałem do %d ile zabiorę: %d", p.nadawca, wanted);
                     pthread_mutex_unlock(&mutexWanted);
-                }
-                // przypadek kiedy nasz lamport był mniejszy, ale nie mamy od wszystkich ACK_TAKE
-                // oznacza to, że osoba pytająca dostała już nasze REQ_TAKE i wpisała sobie nas przed siebie
-                // wysyłamy puste ACK_TAKE
-                else
-                {
+                } else {
+                    // wysyłamy w ACK_TAKE 0, ponieważ
+                    // j jest przed nami w kolejce i nie interesuje go nasza wartość wanted
+                    debug("Wysłałem do %d że jestem za nim", p.nadawca);
                     wyslijPakiet(p.nadawca, ACK_TAKE, 0, -1);
-                    debug("Wysłałem do %d puste ACK_TAKE", p.nadawca);
                 }
                 pthread_mutex_unlock(&mutexAckCounterTake);
                 pthread_mutex_unlock(&mutexLamportyWyslania);

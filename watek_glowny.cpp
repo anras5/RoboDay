@@ -16,7 +16,7 @@ void mainLoop()
             // losowanie części
             pthread_mutex_lock(&mutexWanted);
             // wanted = rand() % (C / 2) + 1;
-            wanted = 8;
+            wanted = 5;
             // wysyłanie wszystkim ile chcę części
             debug("[REST_PROJECT] Chcę %d części -> [WAIT_TAKE], AckCounterTake: %d", wanted, AckCounterTake);
             // ustawiamy wektor z informacjami od jakiego procesu dostaliśmy ACK_TAKE
