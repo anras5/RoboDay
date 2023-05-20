@@ -16,4 +16,4 @@ clean:
 	rm main
 
 run: main
-	mpirun -np 6 ./main
+	mpirun -np 3 ./main
