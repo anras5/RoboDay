@@ -24,18 +24,18 @@ void *startWatekKom(void *ptr)
             {
                 pthread_mutex_lock(&mutexLamportyWyslania);
                 pthread_mutex_lock(&mutexAckCounterTake);
-                debug("Otrzymałem REQ_TAKE od %d z %d częściami, LAMPORT_%d: %d, LAMPORT_%d: %d", p.nadawca, p.liczbaCzesci, p.nadawca, p.lamport, rank, lamportyWyslania.at(p.nadawca));                
+                debug("[WAIT_TAKE] Otrzymałem REQ_TAKE od %d z %d częściami, LAMPORT_%d: %d, LAMPORT_%d: %d", p.nadawca, p.liczbaCzesci, p.nadawca, p.lamport, rank, lamportyWyslania.at(p.nadawca));                
                 if (p.lamport > lamportyWyslania.at(p.nadawca) || (p.lamport == lamportyWyslania.at(p.nadawca) && p.nadawca > rank)) {
                     // wysyłamy w ACK_TAKE naszą wartość wanted, ponieważ
                     // j jest za nami w kolejce i musi nas wziąc pod uwagę
                     pthread_mutex_lock(&mutexWanted);
                     wyslijPakiet(p.nadawca, ACK_TAKE, wanted, -1);
-                    debug("Wysłałem do %d ile zabiorę: %d", p.nadawca, wanted);
+                    debug("[WAIT_TAKE] Wysłałem do %d ile zabiorę: %d", p.nadawca, wanted);
                     pthread_mutex_unlock(&mutexWanted);
                 } else {
                     // wysyłamy w ACK_TAKE 0, ponieważ
                     // j jest przed nami w kolejce i nie interesuje go nasza wartość wanted
-                    debug("Wysłałem do %d że jestem za nim", p.nadawca);
+                    debug("[WAIT_TAKE] Wysłałem do %d że jestem za nim", p.nadawca);
                     wyslijPakiet(p.nadawca, ACK_TAKE, 0, -1);
                 }
                 pthread_mutex_unlock(&mutexAckCounterTake);
@@ -61,7 +61,7 @@ void *startWatekKom(void *ptr)
                 // aktualizuje taken
                 taken = taken + p.liczbaCzesci;
                 ReceivedAckTake.at(p.nadawca) = true;
-                debug("Otrzymałem ACK_TAKE od %d z %d częściami, taken: %d", p.nadawca, p.liczbaCzesci, taken);
+                debug("[WAIT_TAKE] Otrzymałem ACK_TAKE od %d z %d częściami, taken: %d", p.nadawca, p.liczbaCzesci, taken);
                 pthread_mutex_unlock(&mutexAckCounterTake);
                 pthread_mutex_unlock(&mutexTaken);
             }
@@ -81,7 +81,7 @@ void *startWatekKom(void *ptr)
             {
                 if (ReceivedAckTake.at(p.nadawca))
                 {
-                    debug("Otrzymałem REQ_RETURN od %d z %d częściami", p.nadawca, p.liczbaCzesci);
+                    debug("[WAIT_TAKE] Otrzymałem REQ_RETURN od %d z %d częściami", p.nadawca, p.liczbaCzesci);
                     pthread_mutex_lock(&mutexTaken);
                     taken = taken - p.liczbaCzesci;
                     pthread_mutex_unlock(&mutexTaken);
