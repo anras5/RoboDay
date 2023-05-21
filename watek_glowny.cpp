@@ -15,8 +15,13 @@ void mainLoop()
 
             // losowanie części
             pthread_mutex_lock(&mutexWanted);
+            pthread_mutex_lock(&mutexTaken);
             // wanted = rand() % (C / 2) + 1;
-            wanted = 5;
+            wanted = rand() % C + 1;
+            // wanted = 8;
+            taken = 0;
+            powiekszLamport();
+
             // wysyłanie wszystkim ile chcę części
             debug("[REST_PROJECT] Chcę %d części -> [WAIT_TAKE], AckCounterTake: %d", wanted, AckCounterTake);
             // ustawiamy wektor z informacjami od jakiego procesu dostaliśmy ACK_TAKE
@@ -27,6 +32,7 @@ void mainLoop()
             }
             zmienStan(WAIT_TAKE);
             wyslijWszystkim(REQ_TAKE, wanted, -1);
+            pthread_mutex_unlock(&mutexTaken);
             pthread_mutex_unlock(&mutexWanted);
             // zmiana stanu na WAIT_TAKE
             break;
@@ -63,11 +69,10 @@ void mainLoop()
             pthread_mutex_lock(&mutexWanted);
             wanted = 0;
             pthread_mutex_unlock(&mutexWanted);
-            debug("[INSECTION_TAKE] Pobrałem %d części", owned);
-            // symuluje wybieranie części poprzez krótkiego sleepa
             usleep(rand() % 10 * 100000);
+            debug("[INSECTION_TAKE] Pobrałem %d części, zmieniam stan na [REST_BUILDING]", owned);
+            // symuluje wybieranie części poprzez krótkiego sleepa
             // przechodzi do budowy robota
-            debug("[INSECTION_TAKE] Zmieniam stan na [REST_BUILDING]");
             zmienStan(REST_BUILDING);
             break;
         }
@@ -75,6 +80,7 @@ void mainLoop()
         { // symuluje budowanie robota poprzez krótkiego sleepa
             usleep(rand() % 10 * 100000);
             debug("[REST_BUILDING] Zbudowałem robota");
+            powiekszLamport();
 
             // ---------------------------------- TODO ---------------------------- //
             // na razie z REST_BUILDING przechodzi od razu do WAIT_RETURN
@@ -101,7 +107,8 @@ void mainLoop()
             // TODO
             break;
         case WAIT_RETURN:
-        { // czekamy na AckCounterReturn == n - 1
+        {
+            // czekamy na AckCounterReturn == n - 1
             pthread_mutex_lock(&mutexAckCounterReturn);
             if (AckCounterReturn == size - 1)
             {
@@ -115,14 +122,9 @@ void mainLoop()
         case REST_REPAIR:
         { // symulacja naprawy poprzez krótkiego sleepa
             usleep(rand() % 10 * 100000);
-            // ustawia locka na AckCounterReturn i zeruje wartość
-            pthread_mutex_lock(&mutexAckCounterReturn);
-            AckCounterReturn = 0;
-            pthread_mutex_unlock(&mutexAckCounterReturn);
             // wysyła wszystkim wiadomość o oddawaniu
-            debug("[REST_REPAIR] Zmieniam stan na [WAIT_RETURN_REMAINING]");
+            debug("[REST_REPAIR] Oddaję %d części, zmieniam stan na [WAIT_RETURN_REMAINING]", owned);
             zmienStan(WAIT_RETURN_REMAINING);
-            debug("[REST_REPAIR] Oddaję %d części", owned);
             wyslijWszystkim(REQ_RETURN, owned, -1);
             pthread_mutex_lock(&mutexOwned);
             owned = 0;
