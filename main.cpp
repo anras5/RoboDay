@@ -9,11 +9,14 @@ int wanted = 0;
 int owned = 0;
 int taken = 0;
 int AckCounterTake = 0;
-std::vector<int> FightQueue;
-std::vector<bool> ReceivedAckTake;
-std::vector<int> lamportyWyslania;
+int AckCounterFight = 0;
 int AckCounterOpponent = 0;
 int AckCounterReturn = 0;
+std::atomic<bool> callToArms = false;
+std::vector<QueuePlace> FightQueue;
+std::vector<bool> ReceivedAckTake;
+std::vector<int> lamportyWyslania;
+std::vector<int> FightBuffer;
 
 // watek komunikacyjny
 pthread_t watekKom;
@@ -31,9 +34,11 @@ pthread_mutex_t mutexWanted = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexOwned = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexTaken = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexAckCounterTake = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutexAckCounterFight = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexAckCounterOpponent = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexAckCounterReturn = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexLamportyWyslania = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutexFightQueue = PTHREAD_MUTEX_INITIALIZER;
 
 void check_thread_support(int provided)
 {
@@ -68,7 +73,7 @@ int wyslijPakiet(int odbiorca, int tag, int liczbaCzesci, int idPrzeciwnika)
 
     int lamportWyslania = powiekszLamport();
     p->nadawca = rank;
-    p->lamport = lamport;
+    p->lamport = lamportWyslania;
     p->idPrzeciwnika = idPrzeciwnika;
     p->liczbaCzesci = liczbaCzesci;
 
@@ -91,6 +96,37 @@ void wyslijWszystkim(int tag, int liczbaCzesci, int idPrzeciwnika)
             pthread_mutex_unlock(&mutexLamportyWyslania);
         }
     }
+}
+
+void wyslijPakietBezZwiekszania(int odbiorca, int tag, int liczbaCzesci, int idPrzeciwnika, int lamportWyslania)
+{
+    Packet *p = new Packet;
+
+    p->nadawca = rank;
+    p->lamport = lamportWyslania;
+    p->idPrzeciwnika = idPrzeciwnika;
+    p->liczbaCzesci = liczbaCzesci;
+
+    MPI_Send(p, 1, MPI_PAKIET_T, odbiorca, tag, MPI_COMM_WORLD);
+
+    delete p;
+}
+
+int wyslijWszystkimTakiSam(int tag, int liczbaCzesci, int idPrzeciwnika)
+{
+    int lamportWyslania = powiekszLamport();
+    for (int i = 0; i < size; i++)
+    {
+        if (i != rank)
+        {
+            pthread_mutex_lock(&mutexLamportyWyslania);
+            wyslijPakietBezZwiekszania(i, tag, liczbaCzesci, idPrzeciwnika, lamportWyslania);
+            lamportyWyslania.at(i) = lamportWyslania;
+            pthread_mutex_unlock(&mutexLamportyWyslania);
+            powiekszLamport();
+        }
+    }
+    return lamportWyslania;
 }
 
 int powiekszLamport()
@@ -116,6 +152,58 @@ void zmienStan(StanKonstruktora nowyStan)
     pthread_mutex_lock(&mutexStan);
     stan = nowyStan;
     pthread_mutex_unlock(&mutexStan);
+}
+
+void wpiszNaFightQueue(QueuePlace newPlace)
+{
+    pthread_mutex_lock(&mutexFightQueue);
+    // dopisuje konstruktora do listy FightQueue w odpowiednie miejsce zależne od priorytetu
+    auto insertPos = std::lower_bound(FightQueue.begin(), FightQueue.end(), newPlace, porownajQueuePlace);
+    FightQueue.insert(insertPos, newPlace);
+    pthread_mutex_unlock(&mutexFightQueue);
+}
+
+bool usunZFightQueue(int idProcesu)
+{
+    pthread_mutex_lock(&mutexFightQueue);
+    // usuwa konstruktora z listy FightQueue na podstawie idProcesu dostarczonego w QueuePlace
+    for (long unsigned int i = 0; i < FightQueue.size(); i++)
+    {
+        if (idProcesu == FightQueue.at(i).idProcesu)
+        {
+            FightQueue.erase(FightQueue.begin() + i);
+            pthread_mutex_unlock(&mutexFightQueue);
+            return true;
+        }
+    }
+    pthread_mutex_unlock(&mutexFightQueue);
+    return false;
+}
+
+bool porownajQueuePlace(const QueuePlace &a, const QueuePlace &b)
+{
+    if (a.lamportProcesu == b.lamportProcesu)
+    {
+        return a.idProcesu < b.idProcesu;
+    }
+    return a.lamportProcesu < b.lamportProcesu;
+}
+
+void printFightQueue()
+{
+    pthread_mutex_lock(&mutexFightQueue);
+    if (FightQueue.size() > 0)
+    {
+        for (long unsigned int i = 0; i < FightQueue.size(); i++)
+        {
+            debugln("FightQueue: %ld: {%d, %d}", i, FightQueue.at(i).idProcesu, FightQueue.at(i).lamportProcesu);
+        }
+    }
+    else
+    {
+        debugln("FightQueue jest pusta!");
+    }
+    pthread_mutex_unlock(&mutexFightQueue);
 }
 
 void inicjuj(int *argc, char ***argv)
@@ -149,6 +237,7 @@ void inicjuj(int *argc, char ***argv)
     {
         lamportyWyslania.push_back(0);
         ReceivedAckTake.push_back(0);
+        FightBuffer.push_back(0);
     }
 
     pthread_create(&watekKom, NULL, startWatekKom, 0);

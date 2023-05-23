@@ -16,14 +16,13 @@ void mainLoop()
             // losowanie części
             pthread_mutex_lock(&mutexWanted);
             pthread_mutex_lock(&mutexTaken);
-            // wanted = rand() % (C / 2) + 1;
-            wanted = rand() % C + 1;
+            wanted = rand() % (C / 2) + 1;
+            // wanted = rand() % C + 1;
             // wanted = 8;
             taken = 0;
-            powiekszLamport();
 
             // wysyłanie wszystkim ile chcę części
-            debug("[REST_PROJECT] Chcę %d części -> [WAIT_TAKE], AckCounterTake: %d", wanted, AckCounterTake);
+            debugln("[REST_PROJECT] Chcę %d części -> [WAIT_TAKE], AckCounterTake: %d", wanted, AckCounterTake);
             // ustawiamy wektor z informacjami od jakiego procesu dostaliśmy ACK_TAKE
             // aby poprawnie przyjmować od nich REQ_RETURN
             for (long unsigned int i = 0; i < ReceivedAckTake.size(); i++)
@@ -45,7 +44,7 @@ void mainLoop()
             pthread_mutex_lock(&mutexTaken);
             if ((AckCounterTake == size - 1) && (C - taken >= wanted))
             {
-                debug("[WAIT_TAKE] C: %d, taken: %d, wanted: %d, AckCounterTake: %d", C, taken, wanted, AckCounterTake);
+                debugln("[WAIT_TAKE] C: %d, taken: %d, wanted: %d, AckCounterTake: %d", C, taken, wanted, AckCounterTake);
                 czyZmienicStan = true;
                 AckCounterTake = 0;
             }
@@ -55,7 +54,7 @@ void mainLoop()
             {
                 pthread_mutex_lock(&mutexOwned);
                 pthread_mutex_lock(&mutexTaken);
-                debug("[WAIT_TAKE] Wchodzę do sekcji krytycznej -> [INSECTION_TAKE]");
+                debugln("[WAIT_TAKE] Wchodzę do sekcji krytycznej -> [INSECTION_TAKE]");
                 pthread_mutex_unlock(&mutexTaken);
                 zmienStan(INSECTION_TAKE);
             }
@@ -70,49 +69,99 @@ void mainLoop()
             wanted = 0;
             pthread_mutex_unlock(&mutexWanted);
             usleep(rand() % 10 * 100000);
-            debug("[INSECTION_TAKE] Pobrałem %d części, zmieniam stan na [REST_BUILDING]", owned);
+            debugln("[INSECTION_TAKE] Pobrałem %d części, zmieniam stan na [REST_BUILDING]", owned);
             // symuluje wybieranie części poprzez krótkiego sleepa
             // przechodzi do budowy robota
             zmienStan(REST_BUILDING);
             break;
         }
         case REST_BUILDING:
-        { // symuluje budowanie robota poprzez krótkiego sleepa
+        {
+            // symuluje budowanie robota poprzez krótkiego sleepa
             usleep(rand() % 10 * 100000);
-            debug("[REST_BUILDING] Zbudowałem robota");
+            debugln("[REST_BUILDING] Zbudowałem robota");
             powiekszLamport();
 
-            // ---------------------------------- TODO ---------------------------- //
-            // na razie z REST_BUILDING przechodzi od razu do WAIT_RETURN
-            // jest to wersja bez walki
+            // po zbudowaniu robota zmienia stan na WAIT_FIGHT i wysyła wszystkim REQ_FIGHT z takim samym lamportem
+            pthread_mutex_lock(&mutexAckCounterFight);
+            AckCounterFight = 0;
+            pthread_mutex_unlock(&mutexAckCounterFight);
+            zmienStan(WAIT_FIGHT);
+            int lamportWyslania = wyslijWszystkimTakiSam(REQ_FIGHT, 0, -1);
+            debugln("Wysyłam wszystkim REQ_FIGHT");
+            // wpisuje siebie na listę FightQueue
+            QueuePlace myPlace = {rank, lamportWyslania};
+            wpiszNaFightQueue(myPlace);
+
+            break;
+        }
+        case WAIT_FIGHT:
+        {
+            pthread_mutex_lock(&mutexAckCounterFight);
+            // czekamy na AckCounterFight == n - 1
+            if (AckCounterFight == size - 1)
+            {
+                // jeśli znajduję się na pozycji parzystej, wysyłam REQ_OPPONENT_FOUND do wszystkich
+                // i czekam na AckCounterOpponent == n - 1
+                pthread_mutex_lock(&mutexFightQueue);
+                for (long unsigned int i = 0; i < FightQueue.size(); i++)
+                {
+                    if (FightQueue.at(i).idProcesu == rank && i % 2 == 1)
+                    {
+                        int idPrzeciwnika = FightQueue.at(i - 1).idProcesu;
+                        wyslijWszystkim(REQ_OPPONENT_FOUND, 0, idPrzeciwnika);
+                        debugln("[WAIT_FIGHT] Znalazłem przeciwnika: %d", idPrzeciwnika);
+                        break;
+                    }
+                }
+                AckCounterFight = 0;
+                pthread_mutex_unlock(&mutexFightQueue);
+            }
+            // czekamy na AckCounterOpponent == n - 1
+            pthread_mutex_lock(&mutexAckCounterOpponent);
+            if (AckCounterOpponent == size - 1)
+            {
+                AckCounterOpponent = 0;
+                debugln("[WAIT_FIGHT] Zmieniam stan na [INSECTION_FIGHT]");
+                zmienStan(INSECTION_FIGHT);
+            }
+            pthread_mutex_unlock(&mutexAckCounterOpponent);
+            // wątek komunikacyjny odebrał od kogoś REQ_OPPONENT_FIGHT z naszym ID, przechodzimy do walki
+            if (callToArms)
+            {
+                callToArms = false;
+                debugln("[WAIT_FIGHT] Zostałem wybrany do walki, zmieniam stan na [INSECTION_FIGHT]");
+                zmienStan(INSECTION_FIGHT);
+            }
+            pthread_mutex_unlock(&mutexAckCounterFight);
+            break;
+        }
+        case INSECTION_FIGHT:
+        {
+            // symuluje walkę z przeciwnikiem poprzez krótkiego sleepa
+            usleep(rand() % 10 * 800000);
+            debugln("[INSECTION_FIGHT] Walczę");
 
             // losujemy ile chcemy oddać
             pthread_mutex_lock(&mutexOwned);
             int toReturn = rand() % owned;
             // wysyła wszystkim wiadomość o oddawaniu
-            debug("[REST_BUILDING] Oddaję %d części", toReturn);
+            debugln("[REST_BUILDING] Oddaję %d części", toReturn);
             wyslijWszystkim(REQ_RETURN, toReturn, -1);
             owned = owned - toReturn;
             pthread_mutex_unlock(&mutexOwned);
 
-            debug("[REST_BUILDING] Zmieniam stan na [WAIT_RETURN]");
+            debugln("[REST_BUILDING] Zmieniam stan na [WAIT_RETURN]");
             zmienStan(WAIT_RETURN);
-
             break;
         }
-        case WAIT_FIGHT:
-            // TODO
-            break;
-        case INSECTION_FIGHT:
-            // TODO
-            break;
         case WAIT_RETURN:
         {
             // czekamy na AckCounterReturn == n - 1
             pthread_mutex_lock(&mutexAckCounterReturn);
             if (AckCounterReturn == size - 1)
             {
-                debug("[WAIT_RETURN] Zmieniam stan na [REST_REPAIR]");
+                debugln("[WAIT_RETURN] Zmieniam stan na [REST_REPAIR]");
                 zmienStan(REST_REPAIR);
                 AckCounterReturn = 0;
             }
@@ -123,7 +172,7 @@ void mainLoop()
         { // symulacja naprawy poprzez krótkiego sleepa
             usleep(rand() % 10 * 100000);
             // wysyła wszystkim wiadomość o oddawaniu
-            debug("[REST_REPAIR] Oddaję %d części, zmieniam stan na [WAIT_RETURN_REMAINING]", owned);
+            debugln("[REST_REPAIR] Oddaję %d części, zmieniam stan na [WAIT_RETURN_REMAINING]", owned);
             zmienStan(WAIT_RETURN_REMAINING);
             wyslijWszystkim(REQ_RETURN, owned, -1);
             pthread_mutex_lock(&mutexOwned);

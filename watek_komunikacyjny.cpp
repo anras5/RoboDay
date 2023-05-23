@@ -24,18 +24,21 @@ void *startWatekKom(void *ptr)
             {
                 pthread_mutex_lock(&mutexLamportyWyslania);
                 pthread_mutex_lock(&mutexAckCounterTake);
-                debug("[WAIT_TAKE] Otrzymałem REQ_TAKE od %d z %d częściami, LAMPORT_%d: %d, LAMPORT_%d: %d", p.nadawca, p.liczbaCzesci, p.nadawca, p.lamport, rank, lamportyWyslania.at(p.nadawca));                
-                if (p.lamport > lamportyWyslania.at(p.nadawca) || (p.lamport == lamportyWyslania.at(p.nadawca) && p.nadawca > rank)) {
+                debugln("[WAIT_TAKE] Otrzymałem REQ_TAKE od %d z %d częściami, LAMPORT_%d: %d, LAMPORT_%d: %d", p.nadawca, p.liczbaCzesci, p.nadawca, p.lamport, rank, lamportyWyslania.at(p.nadawca));
+                if (p.lamport > lamportyWyslania.at(p.nadawca) || (p.lamport == lamportyWyslania.at(p.nadawca) && p.nadawca > rank))
+                {
                     // wysyłamy w ACK_TAKE naszą wartość wanted, ponieważ
                     // j jest za nami w kolejce i musi nas wziąc pod uwagę
                     pthread_mutex_lock(&mutexWanted);
                     wyslijPakiet(p.nadawca, ACK_TAKE, wanted, -1);
-                    debug("[WAIT_TAKE] Wysłałem do %d ile zabiorę: %d", p.nadawca, wanted);
+                    debugln("[WAIT_TAKE] Wysłałem do %d ile zabiorę: %d", p.nadawca, wanted);
                     pthread_mutex_unlock(&mutexWanted);
-                } else {
+                }
+                else
+                {
                     // wysyłamy w ACK_TAKE 0, ponieważ
                     // j jest przed nami w kolejce i nie interesuje go nasza wartość wanted
-                    debug("[WAIT_TAKE] Wysłałem do %d że jestem za nim", p.nadawca);
+                    debugln("[WAIT_TAKE] Wysłałem do %d że jestem za nim", p.nadawca);
                     wyslijPakiet(p.nadawca, ACK_TAKE, 0, -1);
                 }
                 pthread_mutex_unlock(&mutexAckCounterTake);
@@ -61,19 +64,59 @@ void *startWatekKom(void *ptr)
                 // aktualizuje taken
                 taken = taken + p.liczbaCzesci;
                 ReceivedAckTake.at(p.nadawca) = true;
-                debug("[WAIT_TAKE] Otrzymałem ACK_TAKE od %d z %d częściami, taken: %d", p.nadawca, p.liczbaCzesci, taken);
+                debugln("[WAIT_TAKE] Otrzymałem ACK_TAKE od %d z %d częściami, taken: %d", p.nadawca, p.liczbaCzesci, taken);
                 pthread_mutex_unlock(&mutexAckCounterTake);
                 pthread_mutex_unlock(&mutexTaken);
             }
             break;
         }
         case REQ_FIGHT:
-            break;
+        {
+            // dopisuje konstruktora do listy FightQueue w odpowiednie miejsce zależne od priorytetu
+            QueuePlace newPlace = {p.nadawca, p.lamport};
+            if (FightBuffer.at(p.nadawca) == 0)
+            {
+                wpiszNaFightQueue(newPlace);
+            }
+            else
+            {
+                FightBuffer.at(p.nadawca)--;
+            }
+            // odsyła ACK_FIGHT
+            debugln("Odsyłam ACK_FIGHT do %d", p.nadawca);
+            wyslijPakiet(p.nadawca, ACK_FIGHT, 0, -1);
+        }
+        break;
         case ACK_FIGHT:
-            break;
+        {
+            pthread_mutex_lock(&mutexAckCounterFight);
+            AckCounterFight++;
+            pthread_mutex_unlock(&mutexAckCounterFight);
+            debugln("Otrzymałem ACK_FIGHT od %d", p.nadawca);
+            printFightQueue();
+        }
+        break;
         case REQ_OPPONENT_FOUND:
-            break;
+        {
+            if (stanAktualny == WAIT_FIGHT && p.idPrzeciwnika == rank)
+            {
+                callToArms = true;
+            }
+            usunZFightQueue(p.nadawca);
+            bool czyMialemPrzeciwnika = usunZFightQueue(p.idPrzeciwnika);
+            if (!czyMialemPrzeciwnika)
+            {
+                // kiedy przyjdzie REQ_FIGHT od przeciwnika to go pominę
+                FightBuffer.at(p.idPrzeciwnika)++;
+            }
+            wyslijPakiet(p.nadawca, ACK_OPPONENT_FOUND, 0, -1);
+            debugln("Wysłałem ACK_OPPONENT_FOUND do %d", p.nadawca);
+        }
+        break;
         case ACK_OPPONENT_FOUND:
+            pthread_mutex_lock(&mutexAckCounterOpponent);
+            AckCounterOpponent++;
+            pthread_mutex_unlock(&mutexAckCounterOpponent);
             break;
         case REQ_RETURN:
         {
@@ -81,15 +124,15 @@ void *startWatekKom(void *ptr)
             {
                 if (ReceivedAckTake.at(p.nadawca))
                 {
-                    debug("[WAIT_TAKE] Otrzymałem REQ_RETURN od %d z %d częściami", p.nadawca, p.liczbaCzesci);
+                    debugln("[WAIT_TAKE] Otrzymałem REQ_RETURN od %d z %d częściami", p.nadawca, p.liczbaCzesci);
                     pthread_mutex_lock(&mutexTaken);
                     taken = taken - p.liczbaCzesci;
                     pthread_mutex_unlock(&mutexTaken);
                 }
             }
             wyslijPakiet(p.nadawca, ACK_RETURN, -1, -1);
-            break;
         }
+        break;
         case ACK_RETURN:
         {
             pthread_mutex_lock(&mutexAckCounterReturn);
