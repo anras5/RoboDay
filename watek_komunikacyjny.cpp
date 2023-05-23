@@ -102,15 +102,17 @@ void *startWatekKom(void *ptr)
             {
                 callToArms = true;
             }
+            pthread_mutex_lock(&mutexFightQueue);
             usunZFightQueue(p.nadawca);
             bool czyMialemPrzeciwnika = usunZFightQueue(p.idPrzeciwnika);
+            pthread_mutex_unlock(&mutexFightQueue);
             if (!czyMialemPrzeciwnika)
             {
                 // kiedy przyjdzie REQ_FIGHT od przeciwnika to go pominę
                 FightBuffer.at(p.idPrzeciwnika)++;
             }
             wyslijPakiet(p.nadawca, ACK_OPPONENT_FOUND, 0, -1);
-            debugln("Wysłałem ACK_OPPONENT_FOUND do %d", p.nadawca);
+            debugln("Wysłałem ACK_OPPONENT_FOUND do %d, usunalem %d i %d z FightQueue", p.nadawca, p.nadawca, p.idPrzeciwnika);
         }
         break;
         case ACK_OPPONENT_FOUND:

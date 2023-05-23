@@ -40,6 +40,7 @@ pthread_mutex_t mutexAckCounterReturn = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexLamportyWyslania = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexFightQueue = PTHREAD_MUTEX_INITIALIZER;
 
+// check_thread_support sprawdza czy na maszynie jest wymagane wsparcie
 void check_thread_support(int provided)
 {
     printf("THREAD SUPPORT: chcemy %d. Co otrzymamy?\n", provided);
@@ -67,6 +68,7 @@ void check_thread_support(int provided)
     }
 }
 
+// wyslijPakiet powiększa lamporta konstruktora i wysyła pakiet z danymi zawartymi w argumentach funkcji
 int wyslijPakiet(int odbiorca, int tag, int liczbaCzesci, int idPrzeciwnika)
 {
     Packet *p = new Packet;
@@ -84,6 +86,8 @@ int wyslijPakiet(int odbiorca, int tag, int liczbaCzesci, int idPrzeciwnika)
     return lamportWyslania;
 }
 
+// wyslijWszystkim wysyła wiadomość do każdego innego konstruktora korzystając z funkcji wyslijPakiet
+// oraz zapisuje z jakimi wartościami zegara lamporta zostały wysłane wiadomości do każdego konstruktora
 void wyslijWszystkim(int tag, int liczbaCzesci, int idPrzeciwnika)
 {
     for (int i = 0; i < size; i++)
@@ -98,6 +102,7 @@ void wyslijWszystkim(int tag, int liczbaCzesci, int idPrzeciwnika)
     }
 }
 
+// wyslijPakietBezZwiekszania wysyła wiadomość z danymi zawartymi w argumentach funkcji
 void wyslijPakietBezZwiekszania(int odbiorca, int tag, int liczbaCzesci, int idPrzeciwnika, int lamportWyslania)
 {
     Packet *p = new Packet;
@@ -112,6 +117,12 @@ void wyslijPakietBezZwiekszania(int odbiorca, int tag, int liczbaCzesci, int idP
     delete p;
 }
 
+// wyslijWszystkimTakiSam zwiększa zegar lamporta, 
+// wysyła wiadomość do każdego innego konstruktora korzystając z funkcji wyslijPakietBezZwiekszania,
+// zapisuje z jakimi wartościami zegara lamporta zostały wysłane wiadomości do każdego wątku
+// 
+// do każdego konstruktora wysyłana jest wiadomość z takim samym zegarem lamporta,
+// natomiast przy każdym wysłaniu zwiększana jest wartość zegara
 int wyslijWszystkimTakiSam(int tag, int liczbaCzesci, int idPrzeciwnika)
 {
     int lamportWyslania = powiekszLamport();
@@ -129,6 +140,8 @@ int wyslijWszystkimTakiSam(int tag, int liczbaCzesci, int idPrzeciwnika)
     return lamportWyslania;
 }
 
+// powiekszLamport zwiększa wartość zegara Lamporta
+// używane przy wysyłaniu wiadomości
 int powiekszLamport()
 {
     pthread_mutex_lock(&mutexLamport);
@@ -138,6 +151,8 @@ int powiekszLamport()
     return lamportToReturn;
 }
 
+// powiekszMaxLamport ustawia wartość zegara Lamporta na max(packetClock, lamport) + 1
+// używane przy odbieraniu wiadomości
 int powiekszMaxLamport(int packetClock)
 {
     pthread_mutex_lock(&mutexLamport);
@@ -147,6 +162,7 @@ int powiekszMaxLamport(int packetClock)
     return lamportToReturn;
 }
 
+// zmienStan zmienia stan procesu
 void zmienStan(StanKonstruktora nowyStan)
 {
     pthread_mutex_lock(&mutexStan);
@@ -154,6 +170,7 @@ void zmienStan(StanKonstruktora nowyStan)
     pthread_mutex_unlock(&mutexStan);
 }
 
+// wpiszNaFightQueue dopisuje konstruktora 
 void wpiszNaFightQueue(QueuePlace newPlace)
 {
     pthread_mutex_lock(&mutexFightQueue);
@@ -163,9 +180,22 @@ void wpiszNaFightQueue(QueuePlace newPlace)
     pthread_mutex_unlock(&mutexFightQueue);
 }
 
+// porownajQueuePlace porównuje dwa miejsca na liście FightQueue
+// używane w funkcji wpiszNaFightQueue
+bool porownajQueuePlace(const QueuePlace &a, const QueuePlace &b)
+{
+    if (a.lamportProcesu == b.lamportProcesu)
+    {
+        return a.idProcesu < b.idProcesu;
+    }
+    return a.lamportProcesu < b.lamportProcesu;
+}
+
+// usunZFightQueue usuwa wybranego konstruktora z FightQueue
+// funkcja wymaga wcześniejszego zamknięcia mutexFightQueue
+// i odpowiednio odblokowania mutexFightQueue
 bool usunZFightQueue(int idProcesu)
 {
-    pthread_mutex_lock(&mutexFightQueue);
     // usuwa konstruktora z listy FightQueue na podstawie idProcesu dostarczonego w QueuePlace
     for (long unsigned int i = 0; i < FightQueue.size(); i++)
     {
@@ -176,19 +206,10 @@ bool usunZFightQueue(int idProcesu)
             return true;
         }
     }
-    pthread_mutex_unlock(&mutexFightQueue);
     return false;
 }
 
-bool porownajQueuePlace(const QueuePlace &a, const QueuePlace &b)
-{
-    if (a.lamportProcesu == b.lamportProcesu)
-    {
-        return a.idProcesu < b.idProcesu;
-    }
-    return a.lamportProcesu < b.lamportProcesu;
-}
-
+// printFightQueue wypisuje kolejkę FightQueue
 void printFightQueue()
 {
     pthread_mutex_lock(&mutexFightQueue);
@@ -206,6 +227,7 @@ void printFightQueue()
     pthread_mutex_unlock(&mutexFightQueue);
 }
 
+// inicjuj inicjuje ustawienia MPI oraz odpowiednie wektory przechowujące dane
 void inicjuj(int *argc, char ***argv)
 {
 
@@ -243,10 +265,20 @@ void inicjuj(int *argc, char ***argv)
     pthread_create(&watekKom, NULL, startWatekKom, 0);
 }
 
+// finalizuj usuwa semafory, łączy wątek komunikacyjny oraz zwalnia pamięć zajętą przez MPI
 void finalizuj()
 {
     pthread_mutex_destroy(&mutexLamport);
     pthread_mutex_destroy(&mutexStan);
+    pthread_mutex_destroy(&mutexWanted);
+    pthread_mutex_destroy(&mutexOwned);
+    pthread_mutex_destroy(&mutexTaken);
+    pthread_mutex_destroy(&mutexAckCounterTake);
+    pthread_mutex_destroy(&mutexAckCounterFight);
+    pthread_mutex_destroy(&mutexAckCounterOpponent);
+    pthread_mutex_destroy(&mutexAckCounterReturn);
+    pthread_mutex_destroy(&mutexLamportyWyslania);
+    pthread_mutex_destroy(&mutexFightQueue);
 
     pthread_join(watekKom, NULL);
     MPI_Type_free(&MPI_PAKIET_T);

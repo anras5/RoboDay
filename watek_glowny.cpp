@@ -16,9 +16,9 @@ void mainLoop()
             // losowanie części
             pthread_mutex_lock(&mutexWanted);
             pthread_mutex_lock(&mutexTaken);
-            wanted = rand() % (C / 2) + 1;
+            // wanted = rand() % (C / 2) + 1;
             // wanted = rand() % C + 1;
-            // wanted = 8;
+            wanted = 3;
             taken = 0;
 
             // wysyłanie wszystkim ile chcę części
@@ -110,6 +110,8 @@ void mainLoop()
                     {
                         int idPrzeciwnika = FightQueue.at(i - 1).idProcesu;
                         wyslijWszystkim(REQ_OPPONENT_FOUND, 0, idPrzeciwnika);
+                        usunZFightQueue(rank);
+                        usunZFightQueue(idPrzeciwnika);
                         debugln("[WAIT_FIGHT] Znalazłem przeciwnika: %d", idPrzeciwnika);
                         break;
                     }
@@ -139,8 +141,8 @@ void mainLoop()
         case INSECTION_FIGHT:
         {
             // symuluje walkę z przeciwnikiem poprzez krótkiego sleepa
-            usleep(rand() % 10 * 800000);
             debugln("[INSECTION_FIGHT] Walczę");
+            usleep(rand() % 10 * 800000);
 
             // losujemy ile chcemy oddać
             pthread_mutex_lock(&mutexOwned);
