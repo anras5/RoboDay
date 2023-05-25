@@ -16,9 +16,9 @@ void mainLoop()
             // losowanie części
             pthread_mutex_lock(&mutexWanted);
             pthread_mutex_lock(&mutexTaken);
-            // wanted = rand() % (C / 2) + 1;
+            wanted = rand() % (C / 2) + 1;
             // wanted = rand() % C + 1;
-            wanted = 3;
+            // wanted = 3;
             taken = 0;
 
             // wysyłanie wszystkim ile chcę części
