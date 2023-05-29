@@ -37,7 +37,8 @@ void mainLoop()
             break;
         }
         case WAIT_TAKE:
-        { // sprawdzamy czy AckCounterTake == n - 1 oraz C - taken >= wanted
+        {
+            // sprawdzamy czy AckCounterTake == n - 1 oraz C - taken >= wanted
             // jeżeli tak to wchodzimy do sekcji i zabieramy części
             bool czyZmienicStan = false;
             pthread_mutex_lock(&mutexAckCounterTake);

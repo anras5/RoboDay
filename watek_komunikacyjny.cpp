@@ -28,7 +28,7 @@ void *startWatekKom(void *ptr)
                 if (p.lamport > lamportyWyslania.at(p.nadawca) || (p.lamport == lamportyWyslania.at(p.nadawca) && p.nadawca > rank))
                 {
                     // wysyłamy w ACK_TAKE naszą wartość wanted, ponieważ
-                    // j jest za nami w kolejce i musi nas wziąc pod uwagę
+                    // j jest za nami w kolejce i musi nas wziąć pod uwagę
                     pthread_mutex_lock(&mutexWanted);
                     wyslijPakiet(p.nadawca, ACK_TAKE, wanted, -1);
                     debugln("[WAIT_TAKE] Wysłałem do %d ile zabiorę: %d", p.nadawca, wanted);
@@ -82,8 +82,6 @@ void *startWatekKom(void *ptr)
             {
                 FightBuffer.at(p.nadawca)--;
             }
-            // odsyła ACK_FIGHT
-            debugln("Odsyłam ACK_FIGHT do %d", p.nadawca);
             wyslijPakiet(p.nadawca, ACK_FIGHT, 0, -1);
         }
         break;
@@ -92,7 +90,7 @@ void *startWatekKom(void *ptr)
             pthread_mutex_lock(&mutexAckCounterFight);
             AckCounterFight++;
             pthread_mutex_unlock(&mutexAckCounterFight);
-            debugln("Otrzymałem ACK_FIGHT od %d", p.nadawca);
+            debugln("[WAIT_FIGHT] Otrzymałem ACK_FIGHT od %d", p.nadawca);
             printFightQueue();
         }
         break;
