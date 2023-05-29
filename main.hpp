@@ -31,7 +31,7 @@ extern int C;
 extern int wanted;
 extern int owned;
 extern int taken;
-extern std::atomic<bool> callToArms;
+extern std::atomic_bool callToArms;
 extern int AckCounterTake;
 extern int AckCounterFight;
 extern int AckCounterOpponent;

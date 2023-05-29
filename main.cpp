@@ -12,7 +12,7 @@ int AckCounterTake = 0;
 int AckCounterFight = 0;
 int AckCounterOpponent = 0;
 int AckCounterReturn = 0;
-std::atomic<bool> callToArms = false;
+std::atomic_bool callToArms = false;
 std::vector<QueuePlace> FightQueue;
 std::vector<bool> ReceivedAckTake;
 std::vector<int> lamportyWyslania;
